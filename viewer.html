@@ -1,0 +1,161 @@
+<script type="text/babel">
+        const { useState, useCallback } = React;
+        const { useDropzone } = ReactDropzone;
+
+        const TvIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>
+                <polyline points="17 2 12 7 7 2"></polyline>
+            </svg>
+        );
+
+        const UploadIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+        );
+
+        const FilmIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
+                <line x1="7" y1="2" x2="7" y2="22"></line>
+                <line x1="17" y1="2" x2="17" y2="22"></line>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <line x1="2" y1="7" x2="7" y2="7"></line>
+                <line x1="2" y1="17" x2="7" y2="17"></line>
+                <line x1="17" y1="17" x2="22" y2="17"></line>
+                <line x1="17" y1="7" x2="22" y2="7"></line>
+            </svg>
+        );
+
+        function App() {
+            const [channels, setChannels] = useState([]);
+            const [currentChannel, setCurrentChannel] = useState(null);
+
+            const loadM3UFromURL = async (url) => {
+                try {
+                    const response = await fetch(url);
+                    const content = await response.text();
+                    processM3UContent(content);
+                } catch (error) {
+                    console.error('Error loading M3U file:', error);
+                }
+            };
+
+            const processM3UContent = (content) => {
+                const lines = content.split('\n');
+                const newChannels = [];
+                let currentChannel = {};
+
+                for (let i = 0; i < lines.length; i++) {
+                    if (lines[i].startsWith('#EXTINF:')) {
+                        const infoLine = lines[i];
+                        const nameMatch = infoLine.match(/,(.+)$/);
+                        if (nameMatch) {
+                            currentChannel.name = nameMatch[1].trim();
+                        }
+                        
+                        const tvgLogoMatch = infoLine.match(/tvg-logo="([^"]+)"/);
+                        if (tvgLogoMatch) {
+                            currentChannel.icon = tvgLogoMatch[1];
+                        }
+                    } else if (lines[i].trim() !== '' && !lines[i].startsWith('#')) {
+                        currentChannel.url = lines[i].trim();
+                        if (currentChannel.name && currentChannel.url) {
+                            newChannels.push(currentChannel);
+                            currentChannel = {};
+                        }
+                    }
+                }
+
+                setChannels(newChannels);
+                if (newChannels.length > 0) {
+                    setCurrentChannel(newChannels[0]);
+                }
+            };
+
+            const onDrop = useCallback((acceptedFiles) => {
+                const file = acceptedFiles[0];
+                const reader = new FileReader();
+
+                reader.onload = (e) => {
+                    const content = e.target.result;
+                    processM3UContent(content);
+                };
+
+                reader.readAsText(file);
+            }, []);
+
+            const { getRootProps, getInputProps } = useDropzone({ onDrop, accept: { 'm3u': ['.m3u'] } });
+
+            return (
+                <div className="flex flex-col h-screen bg-gray-900 text-white">
+                    <header className="bg-gray-800 p-4 flex items-center justify-between">
+                        <h1 className="text-2xl font-bold flex items-center">
+                            <TvIcon className="mr-2" /> Full Screen TV Viewer
+                        </h1>
+                        <div className="flex space-x-4">
+                            <button
+                                onClick={() => loadM3UFromURL('https://raw.githubusercontent.com/ipstreet312/freeiptv/master/all.m3u')}
+                                className="bg-green-500 hover:bg-green-600 px-4 py-2 rounded flex items-center"
+                            >
+                                <TvIcon className="mr-2" /> TV
+                            </button>
+                            <button
+                                onClick={() => loadM3UFromURL('https://iptv-org.github.io/iptv/categories/movies.m3u')}
+                                className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded flex items-center"
+                            >
+                                <FilmIcon className="mr-2" /> Movies
+                            </button>
+                            <div {...getRootProps()} className="cursor-pointer">
+                                <input {...getInputProps()} />
+                                <button className="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded flex items-center">
+                                    <UploadIcon className="mr-2" /> Upload M3U
+                                </button>
+                            </div>
+                        </div>
+                    </header>
+                    <main className="flex flex-grow overflow-hidden">
+                        <div className="w-1/4 bg-gray-800 p-4 overflow-y-auto">
+                            <h2 className="text-xl font-semibold mb-4">Channels</h2>
+                            <ul>
+                                {channels.map((channel, index) => (
+                                    <li
+                                        key={index}
+                                        className={`cursor-pointer p-2 hover:bg-gray-700 ${currentChannel?.name === channel.name ? 'bg-gray-700' : ''}`}
+                                        onClick={() => setCurrentChannel(channel)}
+                                    >
+                                        <div className="flex items-center">
+                                            {channel.icon && (
+                                                <img src={channel.icon} alt={channel.name} className="w-6 h-6 mr-2 object-contain" />
+                                            )}
+                                            <span className="font-bold">{channel.name}</span>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                        <div className="w-3/4 relative bg-black">
+                            {currentChannel ? (
+                                <div className="absolute inset-0">
+                                    <ReactPlayer
+                                        url={currentChannel.url}
+                                        playing
+                                        controls
+                                        width="100%"
+                                        height="100%"
+                                    />
+                                </div>
+                            ) : (
+                                <div className="flex items-center justify-center h-full">
+                                    <div className="text-center">
+                                        <p className="text-xl">No channel selected</p>
+                                        <p className="text-gray-400">Click a predefined button or upload an M3U file to start watching</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </main>
+                </div>
